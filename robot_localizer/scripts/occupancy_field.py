@@ -30,6 +30,8 @@ class OccupancyField(object):
 
         # while we're at it let's count the number of occupied cells
         total_occupied = 0
+        occupiedi = []
+        occupiedj = []
         curr = 0
         for i in range(self.map.info.width):
             for j in range(self.map.info.height):
@@ -37,25 +39,20 @@ class OccupancyField(object):
                 ind = i + j*self.map.info.width
                 if self.map.data[ind] > 0:
                     total_occupied += 1
+                    occupiedi.append(float(i))
+                    occupiedj.append(float(j))
                 X[curr, 0] = float(i)
                 X[curr, 1] = float(j)
                 curr += 1
 
-        # The coordinates of each occupied grid cell in the map
-        occupied = np.zeros((total_occupied, 2))
-        curr = 0
-        for i in range(self.map.info.width):
-            for j in range(self.map.info.height):
-                # occupancy grids are stored in row major order
-                ind = i + j*self.map.info.width
-                if self.map.data[ind] > 0:
-                    occupied[curr, 0] = float(i)
-                    occupied[curr, 1] = float(j)
-                    curr += 1
+        dt = np.dtype('float')
+        occupiedCells = np.transpose(np.array([occupiedi, occupiedj],dtype=dt))
+
+        # print("cells size: ", occupiedCells.shape)
 
         # use super fast scikit learn nearest neighbor algorithm
         nbrs = NearestNeighbors(n_neighbors=1,
-                                algorithm="ball_tree").fit(occupied)
+                                algorithm="ball_tree").fit(occupiedCells)
         distances, indices = nbrs.kneighbors(X)
 
         self.closest_occ = {}
