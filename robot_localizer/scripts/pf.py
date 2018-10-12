@@ -134,13 +134,14 @@ class ParticleFilter(object):
                 key=lambda (particle,probability): (particle,probability), 
                 reverse = True)[:(len(self.current_particles) % num_created_particles)])
 
+
             # Create new particles.
             # if num desired particles is larger than current list of particles, we must create triplicates, etc.
             preload = math.floor(len(self.current_particles) / num_created_particles) 
             new_particles = {}
             for particle in self.current_particles.keys():
                 for num in range(len(self.current_particles) % num_created_particles):
-                    new_particles[Particle(particle.x, particle.y, particle.theta, particle.distance)] = 1.0 / 200.0 # All start out with same weight.
+                    new_particles[Particle(particle.x, particle.y, particle.theta, particle.distance)] = self.current_particles[particle]
 
             # Add new dict entries to self.current_particles
             self.current_particles.update(new_particles)
