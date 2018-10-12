@@ -39,10 +39,8 @@ class OccupancyField(object):
                 ind = i + j*self.map.info.width
                 if self.map.data[ind] > 0:
                     total_occupied += 1
-                    occupiedi.append(float(i))
-                    occupiedj.append(float(j))
-                X[curr, 0] = float(i)
-                X[curr, 1] = float(j)
+                    occupiedi.append(float(i)), occupiedj.append(float(j))
+                X[curr, 0], X[curr, 1] = float(i), float(j)
                 curr += 1
 
         dt = np.dtype('float')

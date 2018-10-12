@@ -22,8 +22,10 @@ class RosBoss(object):
 
 		self.position = None
 		self.orientation = None
+		self.linear_vel = None
 		self.ranges = None
-		self.minDistance = 0.0
+		self.minDistance = 1000000.0
+		self.minAngle = 0
 		return
 
 	def laserCallback(self, msg):
@@ -35,9 +37,11 @@ class RosBoss(object):
 			# Person will be closer to the Neato than most things.
 			if ((distance < minDistance) and (distance != 0.0)):
 				self.minDistance = distance
+				self.minAngle = angle
 		return
 
 	def odomCallback(self, msg):
 		self.orientation = msg.pose.pose.orientation
 		self.position = msg.pose.pose.position
+		self.linear_vel = msg.twist.twist.linear
 		return

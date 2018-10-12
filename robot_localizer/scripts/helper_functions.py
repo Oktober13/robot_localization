@@ -6,9 +6,10 @@ from __future__ import print_function, division
 import rospy
 
 from std_msgs.msg import Header
-from geometry_msgs.msg import PoseStamped, Pose, Point, Quaternion
+from geometry_msgs.msg import PoseStamped, Pose, Point, TransformStamped, Quaternion
 
 import tf.transformations as t
+import tf2_geometry_msgs
 from tf import TransformListener
 from tf import TransformBroadcaster
 
@@ -36,7 +37,7 @@ class TFHelper(object):
 
     def convert_pose_inverse_transform(self, pose):
         """ This is a helper method to invert a transform (this is built into
-            the tf C++ classes, but ommitted from Python) """
+            the tf C++ classes, but omitted from Python) """
         transform = t.concatenate_matrices(
             t.translation_matrix([pose.position.x,
                                   pose.position.y,
@@ -56,6 +57,7 @@ class TFHelper(object):
                              pose.orientation.z,
                              pose.orientation.w)
         angles = t.euler_from_quaternion(orientation_tuple)
+        # print(orientation_tuple)
         return (pose.position.x, pose.position.y, angles[2])
 
     def angle_normalize(self, z):
@@ -95,7 +97,7 @@ class TFHelper(object):
         self.tf_listener.waitForTransform('base_link',
                                           'odom',
                                           timestamp,
-                                          rospy.Duration(1.0))
+                                          rospy.Duration(2.0)) # Extended duration due to tf timeout error
         self.odom_to_map = self.tf_listener.transformPose('odom', p)
         (self.translation, self.rotation) = \
             self.convert_pose_inverse_transform(self.odom_to_map.pose)
@@ -108,3 +110,20 @@ class TFHelper(object):
                                           rospy.get_rostime(),
                                           'odom',
                                           'map')
+
+    def euler_to_quat(self, yaw):
+        """ Convert Euler to quaternion. """
+        quat_array = t.quaternion_from_euler(0.0, 0.0, yaw)
+        return Quaternion(quat_array[0], quat_array[1], quat_array[2], quat_array[3])
+
+    def transform(self, passed_pose):
+        """ Apply a transform to a given pose. """
+        transform = TransformStamped()
+        transform.header = rospy.get_rostime()
+        transform.transform.translation = Point(self.translation[0],self.translation[1], 0.0)
+        transform.transform.rotation = Quaternion(self.rotation[0],self.rotation[1],self.rotation[2],self.rotation[3])
+
+        pose = PoseStamped(rospy.get_rostime(), passed_pose)
+        pose = tf2_geometry_msgs.do_transform_pose(pose, transform)
+        
+        return pose
