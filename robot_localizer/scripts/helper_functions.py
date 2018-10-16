@@ -50,14 +50,17 @@ class TFHelper(object):
         return (t.translation_from_matrix(inverse_transform_matrix),
                 t.quaternion_from_matrix(inverse_transform_matrix))
 
-    def convert_pose_to_xy_and_theta(self, pose):
+    def convert_pose_to_xy_and_theta(self, passed_stamped_pose):
         """ Convert pose (geometry_msgs.Pose) to a (x,y,yaw) tuple """
+        # Convert to map coordinate frame from odom
+        pose = self.transform(passed_stamped_pose).pose # Apply current transform to given pose
+
         orientation_tuple = (pose.orientation.x,
                              pose.orientation.y,
                              pose.orientation.z,
                              pose.orientation.w)
         angles = t.euler_from_quaternion(orientation_tuple)
-        # print(orientation_tuple)
+
         return (pose.position.x, pose.position.y, angles[2])
 
     def angle_normalize(self, z):
@@ -112,18 +115,19 @@ class TFHelper(object):
                                           'map')
 
     def euler_to_quat(self, yaw):
-        """ Convert Euler to quaternion. """
+        """ Convert Euler angles to quaternion. """
         quat_array = t.quaternion_from_euler(0.0, 0.0, yaw)
         return Quaternion(quat_array[0], quat_array[1], quat_array[2], quat_array[3])
 
-    def transform(self, passed_pose):
+    def transform(self, passed_stamped_pose):
         """ Apply a transform to a given pose. """
+        # Creating / Updating transform with latest translation and rotation.
         transform = TransformStamped()
         transform.header = rospy.get_rostime()
         transform.transform.translation = Point(self.translation[0],self.translation[1], 0.0)
         transform.transform.rotation = Quaternion(self.rotation[0],self.rotation[1],self.rotation[2],self.rotation[3])
 
-        pose = PoseStamped(rospy.get_rostime(), passed_pose)
-        pose = tf2_geometry_msgs.do_transform_pose(pose, transform)
+        # pose = PoseStamped(passed_stamped_pose.header, passed_stamped_pose.pose)
+        pose = tf2_geometry_msgs.do_transform_pose(passed_stamped_pose, transform)
         
         return pose

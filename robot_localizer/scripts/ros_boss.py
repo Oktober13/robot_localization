@@ -6,9 +6,7 @@ import math
 import atexit
 import statistics
 
-from geometry_msgs.msg import Vector3
-from geometry_msgs.msg import Twist
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, PoseStamped, Twist, Vector3
 from std_msgs.msg import ColorRGBA, Header
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import Odometry
@@ -19,6 +17,8 @@ class RosBoss(object):
 	def __init__(self):
 		scan = rospy.Subscriber("/stable_scan", LaserScan, self.laserCallback)
 		odom = rospy.Subscriber("/odom", Odometry, self.odomCallback)
+		initialpose = rospy.Subscriber("/move_base_simple/goal", PoseStamped, self.initialPoseCallback)
+		# ^ Should be /initialpose, but that topic's not showing up for me?
 
 		self.position = None
 		self.orientation = None
@@ -44,4 +44,9 @@ class RosBoss(object):
 		self.orientation = msg.pose.pose.orientation
 		self.position = msg.pose.pose.position
 		self.linear_vel = msg.twist.twist.linear
+		return
+
+	def initialPoseCallback(self, msg):
+		self.initOrientation = msg.pose.pose.orientation
+		self.initPosition = msg.pose.pose.position
 		return

@@ -63,12 +63,9 @@ class ParticleFilter(object):
             based on a pose estimate.  These pose estimates could be generated
             by another ROS Node or could come from the rviz GUI """
 
-        xy_theta = \
-        self.tfh.convert_pose_to_xy_and_theta(msg.pose.pose)
+        self.tfh.fix_map_to_odom_transform(msg.pose.pose, msg.header.stamp) # Update transform between map and odom.
 
-        # TODO this should be deleted before posting
-        self.tfh.fix_map_to_odom_transform(msg.pose.pose,
-                                                        msg.header.stamp)
+        xy_theta = self.tfh.convert_pose_to_xy_and_theta(msg.pose) # Get position and orientation from pose
 
         if len(self.current_particles) == 0: #Initial generation of particles
             self.generate_initial_particles(xy_theta)
@@ -92,7 +89,7 @@ class ParticleFilter(object):
             #         Quaternion()))
 
     def generate_initial_particles(self, xy_theta):
-        """ Generate a number of initial particles and add them to the dict. """
+        """ Generate a number of initial particles and add them to the dict. x & y are in meters."""
         raw_x, raw_y, theta = xy_theta
         timenow = rospy.get_rostime()
 
@@ -100,11 +97,11 @@ class ParticleFilter(object):
         # + self.transform_helper.translation.y
         for num in range(self.max_particle_number):
             # Generate random x,y, theta coordinate for particle, and add as key-value pair to dict of particles
-            [raw_x,raw_y] = np.random.multivariate_normal([raw_x, raw_y], [[0.0, 0.0],[0.0, 0.0]])
-            raw_theta = np.random.uniform(0.0, 2 * math.pi)
+            [x,y] = np.random.multivariate_normal([raw_x, raw_y], [[0.0, 0.0],[0.0, 0.0]])
+            theta = np.random.uniform(0.0, 2 * math.pi)
 
-            pose = self.tfh.transform(Pose(Point(raw_x, raw_y, 0.0), self.tfh.euler_to_quat(raw_theta)))
-            x, y, theta = self.tfh.convert_pose_to_xy_and_theta(Pose(pose.pose.position, pose.pose.orientation))
+            # pose = self.tfh.transform(Pose(Point(raw_x, raw_y, 0.0), self.tfh.euler_to_quat(raw_theta)))
+            # x, y, theta = self.tfh.convert_pose_to_xy_and_theta(Pose(pose.pose.position, pose.pose.orientation))
             self.current_particles[Particle(x,y,theta)] = (1.0 / self.max_particle_number)
         return
         
@@ -125,7 +122,6 @@ class ParticleFilter(object):
 
     def generate_probability_dist(self):
         """ Generates more particles around the existing most likely particles. """
-
         if len(self.current_particles.values()) < self.max_particle_number:
             num_created_particles = self.max_particle_number - len(self.current_particles.values())
             # Iterate through sorted list of particles to get list of best options
@@ -149,16 +145,15 @@ class ParticleFilter(object):
 
     def calc_new_weights(self, particle):
         """ Iterates through list of particles and calculates new weights. """
-
         angle_probability = self.tfh.angle_diff(self.ros_boss.minAngle, particle.theta) / (2 * math.pi)
         distance_probability = abs(self.ros_boss.minDistance - particle.distance) / self.ros_boss.minDistance # Shortest laser scan - shortest laser scan for current particle.
         self.current_particles[particle] = angle_probability + distance_probability
         return
 
     def estimate_future_particles(self, particle, timesince):
-        """ Estimate future particle locations given noise and current speed. """
+        """ Estimate future particle locations given noise and current speed. Particles are in the map frame. """
 
-        particle.distance = math.sqrt((self.ros_boss.linear_vel.x * timesince)**2 + (self.ros_boss.linear_vel.y * timesince)**2) + np.random.uniform(-1.0, 1.0)
+        particle.distance = math.sqrt((self.ros_boss.linear_vel.x * timesince)**2 + (self.ros_boss.linear_vel.y * timesince)**2) + np.random.uniform(-0.1, 0.1)
         particle.x = particle.x + self.ros_boss.linear_vel.x * timesince + np.random.uniform(-1.0,1.0) # DeltaX = Velx * time + noise
         particle.y = particle.y + self.ros_boss.linear_vel.y * timesince + np.random.uniform(-1.0,1.0)
         return
