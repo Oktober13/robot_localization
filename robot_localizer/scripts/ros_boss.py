@@ -20,8 +20,7 @@ class RosBoss(object):
 		initialpose = rospy.Subscriber("/move_base_simple/goal", PoseStamped, self.initialPoseCallback)
 		# ^ Should be /initialpose, but that topic's not showing up for me?
 
-		self.position = None
-		self.orientation = None
+		self.stamped_pose = None
 		self.linear_vel = None
 		self.ranges = None
 		self.minDistance = 1000000.0
@@ -41,12 +40,19 @@ class RosBoss(object):
 		return
 
 	def odomCallback(self, msg):
-		self.orientation = msg.pose.pose.orientation
-		self.position = msg.pose.pose.position
-		self.linear_vel = msg.twist.twist.linear
+		if self.poseGiven(): # Ensures PF will not run without a pose value from the user.
+			self.stamped_pose = msg.pose # this is a PoseStamped
+			self.linear_vel = msg.twist.twist.linear
 		return
 
-	def initialPoseCallback(self, msg):
-		self.initOrientation = msg.pose.pose.orientation
-		self.initPosition = msg.pose.pose.position
+	def initialPoseCallback(self, msg): # User set the initial pose.
+		self.stamped_pose = PoseStamped(
+			header=msg.header, 
+			pose=msg.pose)
 		return
+
+	def poseGiven(self):
+		if (self.stamped_pose is not None):
+			return True
+		else:
+			return False

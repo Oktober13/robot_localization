@@ -54,6 +54,8 @@ class ParticleFilter(object):
         self.max_particle_number = 100
         self.map_width = self.occupancy_field.map.info.width
         self.map_height = self.occupancy_field.map.info.height
+        self.map_origin = (self.occupancy_field.map.info.origin.position.x, self.occupancy_field.map.info.origin.position.y)
+        self.map_resolution = self.occupancy_field.map.info.resolution
         self.particle_viz = ParticlesMarker()
 
         self.last_time = time.time()
@@ -65,28 +67,27 @@ class ParticleFilter(object):
 
         self.tfh.fix_map_to_odom_transform(msg.pose.pose, msg.header.stamp) # Update transform between map and odom.
 
-        xy_theta = self.tfh.convert_pose_to_xy_and_theta(msg.pose) # Get position and orientation from pose
+        if self.ros_boss.poseGiven():
+            xy_theta = self.tfh.convert_pose_to_xy_and_theta(self.ros_boss.stamped_pose) # Get position and orientation from pose
 
-        if len(self.current_particles) == 0: #Initial generation of particles
-            self.generate_initial_particles(xy_theta)
-        else:
-            # self.current_particles = {(Particle : probability}
-            threshold = self.thresholdWeight() # Calculate threshold weight
-            self.sample_best_particles(threshold) # self.current_particles = selected best particles.
-            self.generate_probability_dist() # "Refills" any missing particles by placing them around the most likely current particles.
-            for particle in self.current_particles.keys():
-                self.calc_new_weights(particle) # Calculates new probabilities for all particles (Evaluation)
-                timesince = time.time() - self.last_time
-                self.estimate_future_particles(particle, timesince) # Move particles forward in time
-                self.last_time = time.time()
-                self.normalize_weights(particle, max(self.current_particles.values()))
+            if len(self.current_particles) == 0: #Initial generation of particles
+                self.generate_initial_particles(xy_theta)
+            else:
+                # self.current_particles = {(Particle : probability}
+                threshold = self.thresholdWeight() # Calculate threshold weight
+                self.sample_best_particles(threshold) # self.current_particles = selected best particles.
+                self.generate_probability_dist() # "Refills" any missing particles by placing them around the most likely current particles.
+                for particle in self.current_particles.keys():
+                    self.calc_new_weights(particle) # Calculates new probabilities for all particles (Evaluation)
+                    timesince = time.time() - self.last_time
+                    self.estimate_future_particles(particle, timesince) # Move particles forward in time
+                    self.last_time = time.time()
+                    self.normalize_weights(particle, max(self.current_particles.values()))
 
-            # Update RViz map and particles
-            self.particle_viz.updateParticles(self.current_particles) # Update rviz visualization
-            # self.transform_helper.fix_map_to_odom_transform(
-            #     Pose(
-            #         Point()
-            #         Quaternion()))
+                # Update RViz map and particles
+                self.particle_viz.updateParticles(self.current_particles,
+                    self.map_origin,
+                    self.map_resolution) # Update rviz visualization
 
     def generate_initial_particles(self, xy_theta):
         """ Generate a number of initial particles and add them to the dict. x & y are in meters."""
@@ -103,6 +104,9 @@ class ParticleFilter(object):
             # pose = self.tfh.transform(Pose(Point(raw_x, raw_y, 0.0), self.tfh.euler_to_quat(raw_theta)))
             # x, y, theta = self.tfh.convert_pose_to_xy_and_theta(Pose(pose.pose.position, pose.pose.orientation))
             self.current_particles[Particle(x,y,theta)] = (1.0 / self.max_particle_number)
+
+        self.particle_viz.bestParticle = (list(self.current_particles.items()))[0]
+
         return
         
     def sample_best_particles(self, threshold):
@@ -130,14 +134,25 @@ class ParticleFilter(object):
                 key=lambda (particle,probability): (particle,probability), 
                 reverse = True)[:(len(self.current_particles) % num_created_particles)])
 
+            if len(topProbabilities) > 0:
+                # Get best particle (first in sorted dict)
+                best_particle, probability = (list(topProbabilities.items()))[0]
+                # Set value in particle_viz
+                self.particle_viz.bestParticlePose = Pose(Point(best_particle.x, best_particle.y, 0.0), self.tfh.euler_to_quat(best_particle.theta))
 
             # Create new particles.
-            # if num desired particles is larger than current list of particles, we must create triplicates, etc.
             preload = math.floor(len(self.current_particles) / num_created_particles) 
             new_particles = {}
+            index = 0
+
             for particle in self.current_particles.keys():
-                for num in range(len(self.current_particles) % num_created_particles):
+                # if num desired particles is larger than current list of particles, we must create triplicates, etc.
+                for num in range(int(preload)):
                     new_particles[Particle(particle.x, particle.y, particle.theta, particle.distance)] = self.current_particles[particle]
+                # These are the ones that get an extra first, if the number of new particles is not evenly divisible.
+                if (index <= (len(self.current_particles) % num_created_particles)): 
+                    new_particles[Particle(particle.x, particle.y, particle.theta, particle.distance)] = self.current_particles[particle]
+                index += 1
 
             # Add new dict entries to self.current_particles
             self.current_particles.update(new_particles)
@@ -154,8 +169,8 @@ class ParticleFilter(object):
         """ Estimate future particle locations given noise and current speed. Particles are in the map frame. """
 
         particle.distance = math.sqrt((self.ros_boss.linear_vel.x * timesince)**2 + (self.ros_boss.linear_vel.y * timesince)**2) + np.random.uniform(-0.1, 0.1)
-        particle.x = particle.x + self.ros_boss.linear_vel.x * timesince + np.random.uniform(-1.0,1.0) # DeltaX = Velx * time + noise
-        particle.y = particle.y + self.ros_boss.linear_vel.y * timesince + np.random.uniform(-1.0,1.0)
+        particle.x = particle.x + self.ros_boss.linear_vel.x * timesince + np.random.uniform(-0.1,0.1) # DeltaX = Velx * time + noise
+        particle.y = particle.y + self.ros_boss.linear_vel.y * timesince + np.random.uniform(-0.1,0.1)
         return
 
     def normalize_weights(self, particle, max_val):
